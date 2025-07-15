@@ -84,9 +84,10 @@ for name, ticker in participants.items():
 
 # — Create DataFrame and sort
 if rows:
-    df = (pd.DataFrame(rows)
-            .sort_values("% Gain", ascending=False)
-            .reset_index(drop=True).assign(Row_Number=lambda x: range(1, len(x) + 1)))
+    df = pd.DataFrame(rows)
+    df = df.sort_values("% Gain", ascending=False).reset_index(drop=True)
+    # shift index to start at 1
+    df.index = df.index + 1
 else:
     df = pd.DataFrame(columns=["Friend", "Ticker", "Baseline Price", "Current Price", "% Gain"])
 
