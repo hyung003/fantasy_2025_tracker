@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
 # — Page config
@@ -43,34 +43,23 @@ participants = {
     "Henry":   "REPL",
 }
 
-# — On first run, fetch baseline OPEN (or fallback to close)
+# — Hardcoded baseline prices
 if "open_prices" not in st.session_state:
-    opens = {}
-    start_str = baseline_date.strftime("%Y-%m-%d")
-    end_str   = (baseline_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    st.session_state.open_prices = {
+        "ZS": 288.2,
+        "TXT": 84.66,
+        "RTX": 147.89,
+        "TSM": 229.33,
+        "RKLB": 39.30,
+        "BMNR": 47.40,
+        "XRP-USD": 2.8359,
+        "DOGE-USD": 0.198595,
+        "SUPRA-USD": 0.004273,
+        "REPL": 10.94,
+    }
 
-    for name, ticker in participants.items():
-        try:
-            hist = yf.Ticker(ticker).history(start=start_str, end=end_str, interval="1d")
-            if not hist.empty:
-                opens[ticker] = hist["Open"].iloc[0]
-            else:
-                # fallback to last available close
-                hist2 = yf.Ticker(ticker).history(period="2d", interval="1d")
-                if len(hist2) >= 2:
-                    opens[ticker] = hist2["Close"].iloc[-2]
-                elif len(hist2) == 1:
-                    opens[ticker] = hist2["Close"].iloc[0]
-                else:
-                    opens[ticker] = None
-        except Exception as e:
-            st.warning(f"Could not fetch baseline for {ticker}: {e}")
-            opens[ticker] = None
-
-    st.session_state.open_prices = opens
-
-# — Build leaderboard with numeric values
-data = []
+# — Build leaderboard
+rows = []
 for name, ticker in participants.items():
     open_price = st.session_state.open_prices.get(ticker)
     if open_price is None:
@@ -85,20 +74,23 @@ for name, ticker in participants.items():
 
     pct_gain = (current - open_price) / open_price * 100
 
-    data.append({
-        "Friend":          name,
-        "Ticker":          ticker,
-        "Baseline Price":  open_price,
-        "Current Price":   current,
-        "% Gain":          pct_gain
+    rows.append({
+        "Friend":         name,
+        "Ticker":         ticker,
+        "Baseline Price": open_price,
+        "Current Price":  current,
+        "% Gain":         pct_gain
     })
 
-# — Create DataFrame and sort by numeric % Gain descending
-df = (pd.DataFrame(data)
-        .sort_values("% Gain", ascending=False)
-        .reset_index(drop=True))
+# — Create DataFrame and sort
+if rows:
+    df = (pd.DataFrame(rows)
+            .sort_values("% Gain", ascending=False)
+            .reset_index(drop=True))
+else:
+    df = pd.DataFrame(columns=["Friend", "Ticker", "Baseline Price", "Current Price", "% Gain"])
 
-# — Display with formatting
+# — Display
 st.subheader("🏆 Live Rankings")
 st.dataframe(
     df.style.format({
@@ -113,8 +105,7 @@ st.dataframe(
 if not df.empty:
     top = df.iloc[0]
     st.markdown(
-        f"### 🥇 Leader: **{top.Friend}** "
-        f"({top.Ticker}) up **{top['% Gain']:+.2f}%**"
+        f"### 🥇 Leader: **{top.Friend}** ({top.Ticker}) up **{top['% Gain']:+.2f}%**"
     )
 
 # — Last refresh timestamp
