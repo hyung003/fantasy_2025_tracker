@@ -7,21 +7,20 @@ import pytz
 # — Page config
 st.set_page_config(page_title="📈 $100 Contest Tracker", layout="wide")
 
-# Timezone
+# — Timezone
 pst = pytz.timezone("America/Los_Angeles")
 
-# Contest baseline date (market open on July 14, 2025)
+# — Contest baseline date (market open on July 14, 2025)
 baseline_date = pst.localize(datetime(2025, 7, 14, 6, 30))
+contest_end   = pst.localize(datetime(2025, 7, 25, 13, 0))
 
-# Contest window (for display)
-contest_end = pst.localize(datetime(2025, 7, 25, 13, 0))
-
+# — Header
 st.title("📊 Stock & Crypto $100 Contest")
 now = datetime.now(pst)
 st.markdown(
     f"**Contest Baseline:** {baseline_date.strftime('%b %d %Y, %I:%M %p PST')}  \n"
-    f"**Contest Ends:** {contest_end.strftime('%b %d %Y, %I:%M %p PST')}  \n"
-    f"**Current Time:** {now.strftime('%b %d, %Y %I:%M %p PST')}"
+    f"**Contest Ends:**   {contest_end.strftime('%b %d %Y, %I:%M %p PST')}  \n"
+    f"**Current Time:**   {now.strftime('%b %d, %Y %I:%M %p PST')}"
 )
 
 # — Track last refresh
@@ -35,7 +34,7 @@ participants = {
     "Matthew": "ZS",
     "Bryan":   "TXT",
     "Vaillen": "RTX",
-    "Jensen":  "TSM",       # TSMC
+    "Jensen":  "TSM",       # TSMC on NYSE
     "Simon":   "RKLB",
     "Chris":   "BMNR",
     "Alvin":   "XRP-USD",
@@ -44,26 +43,30 @@ participants = {
     "Henry":   "REPL",
 }
 
-# — On first run, grab baseline opens (or fallback to recent close)
+# — On first run, fetch baseline OPEN (or fallback to close)
 if "open_prices" not in st.session_state:
     opens = {}
     start_str = baseline_date.strftime("%Y-%m-%d")
     end_str   = (baseline_date + timedelta(days=1)).strftime("%Y-%m-%d")
     for name, ticker in participants.items():
-        hist = yf.Ticker(ticker).history(
-            start=start_str, end=end_str, interval="1d", progress=False
-        )
-        if not hist.empty:
-            opens[ticker] = hist["Open"].iloc[0]
-        else:
-            # fallback: last available close
-            hist2 = yf.Ticker(ticker).history(period="2d", interval="1d", progress=False)
-            if len(hist2) >= 2:
-                opens[ticker] = hist2["Close"].iloc[-2]
-            elif len(hist2) == 1:
-                opens[ticker] = hist2["Close"].iloc[0]
+        try:
+            hist = yf.Ticker(ticker).history(
+                start=start_str, end=end_str, interval="1d"
+            )
+            if not hist.empty:
+                opens[ticker] = hist["Open"].iloc[0]
             else:
-                opens[ticker] = None
+                # fallback to the last available close
+                hist2 = yf.Ticker(ticker).history(period="2d", interval="1d")
+                if len(hist2) >= 2:
+                    opens[ticker] = hist2["Close"].iloc[-2]
+                elif len(hist2) == 1:
+                    opens[ticker] = hist2["Close"].iloc[0]
+                else:
+                    opens[ticker] = None
+        except Exception as e:
+            st.warning(f"Could not fetch baseline for {ticker}: {e}")
+            opens[ticker] = None
     st.session_state.open_prices = opens
 
 # — Build leaderboard
@@ -73,17 +76,21 @@ for name, ticker in participants.items():
     if open_price is None:
         continue
 
-    info = yf.Ticker(ticker).info
-    # current if market open, else previous close
-    current = info.get("regularMarketPrice") or info.get("previousClose")
+    try:
+        info = yf.Ticker(ticker).info
+        current = info.get("regularMarketPrice") or info.get("previousClose")
+    except Exception as e:
+        st.warning(f"Could not fetch current price for {ticker}: {e}")
+        continue
+
     pct_gain = (current - open_price) / open_price * 100
 
     rows.append({
-        "Friend":          name,
-        "Ticker":          ticker,
-        "Baseline Price":  f"${open_price:,.2f}",
-        "Current Price":   f"${current:,.2f}",
-        "% Gain":          f"{pct_gain:+.2f}%"
+        "Friend":         name,
+        "Ticker":         ticker,
+        "Baseline Price": f"${open_price:,.2f}",
+        "Current Price":  f"${current:,.2f}",
+        "% Gain":         f"{pct_gain:+.2f}%"
     })
 
 df = pd.DataFrame(rows).sort_values("% Gain", ascending=False).reset_index(drop=True)
