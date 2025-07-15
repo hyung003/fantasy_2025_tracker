@@ -101,4 +101,5 @@ if not df.empty:
         f"({top.Ticker}) up **{top['% Gain']:.2f}%**"
     )
 
+
 st.caption(f"Last data refresh: {st.session_state.last_refresh.strftime('%I:%M:%S %p PST')}")
